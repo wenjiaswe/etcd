@@ -464,6 +464,8 @@ func (clus *Cluster) sendOpWithResp(idx int, op rpcpb.Operation) (*rpcpb.Respons
 	if err != nil {
 		return nil, err
 	}
+	clus.lg.Info("WENJIALOG wait for 10 seconds")
+	time.Sleep(10 * time.Second)
 
 	resp, err := clus.agentStreams[idx].Recv()
 	if resp != nil {
