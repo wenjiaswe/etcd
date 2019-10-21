@@ -206,6 +206,7 @@ func StartEtcd(inCfg *Config) (e *Etcd, err error) {
 		EnableGRPCGateway:          cfg.EnableGRPCGateway,
 		EnableLeaseCheckpoint:      cfg.ExperimentalEnableLeaseCheckpoint,
 		CompactionBatchLimit:       cfg.ExperimentalCompactionBatchLimit,
+		EnableClusterDowngrade:     cfg.ExperimentalEnableClusterDowngrade,
 	}
 	print(e.cfg.logger, *cfg, srvcfg, memberInitialized)
 	if e.Server, err = etcdserver.NewServer(srvcfg); err != nil {
@@ -278,6 +279,9 @@ func print(lg *zap.Logger, ec Config, sc etcdserver.ServerConfig, memberInitiali
 			plog.Infof("initial advertise peer URLs = %s", sc.PeerURLs)
 			plog.Infof("initial cluster = %s", sc.InitialPeerURLsMap)
 		}
+		if sc.EnableClusterDowngrade {
+			plog.Infof("enable cluster downgrade support")
+		}
 	} else {
 		cors := make([]string, 0, len(ec.CORS))
 		for v := range ec.CORS {
@@ -312,6 +316,7 @@ func print(lg *zap.Logger, ec Config, sc etcdserver.ServerConfig, memberInitiali
 			zap.String("wal-dir-dedicated", sc.DedicatedWALDir),
 			zap.String("member-dir", sc.MemberDir()),
 			zap.Bool("force-new-cluster", sc.ForceNewCluster),
+			zap.Bool("experimental-enable-cluster-downgrade", sc.EnableClusterDowngrade),
 			zap.String("heartbeat-interval", fmt.Sprintf("%v", time.Duration(sc.TickMs)*time.Millisecond)),
 			zap.String("election-timeout", fmt.Sprintf("%v", time.Duration(sc.ElectionTicks*int(sc.TickMs))*time.Millisecond)),
 			zap.Bool("initial-election-tick-advance", sc.InitialElectionTickAdvance),
