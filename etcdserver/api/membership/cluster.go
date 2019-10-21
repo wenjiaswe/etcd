@@ -800,7 +800,7 @@ func mustDetectDowngrade(lg *zap.Logger, cv *semver.Version) {
 }
 
 func IsOneMinorVersionDiff(cv *semver.Version, lv *semver.Version) bool {
-	if (cv.Major == lv.Major) && ((cv.Minor-lv.Minor) == 1 || lv.Minor > cv.Minor) {
+	if (cv.Major == lv.Major) && ((cv.Minor-lv.Minor) == 1 || (lv.Minor - cv.Minor) == 1) {
 		return true
 	}
 	return false

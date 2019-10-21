@@ -232,8 +232,7 @@ func decideClusterVersion(lg *zap.Logger, vers map[string]*version.Versions) *se
 //    update cluster version if the decided version is +1 or -1 minor
 //    version difference than current cluster version
 func canUpdateClusterVersion(clusterDowngradeEnabled bool, decidedClusterVersion *semver.Version, currentClusterVersion *semver.Version) bool {
-	if (!clusterDowngradeEnabled && currentClusterVersion.LessThan(*decidedClusterVersion)) ||
-		(clusterDowngradeEnabled && membership.IsOneMinorVersionDiff(currentClusterVersion, decidedClusterVersion)) {
+	if membership.IsOneMinorVersionDiff(currentClusterVersion, decidedClusterVersion) {
 		return true
 	}
 	return false
