@@ -513,6 +513,21 @@ func mustDetectDowngrade(cv *semver.Version) {
 	// only keep major.minor version for comparison against cluster version
 	lv = &semver.Version{Major: lv.Major, Minor: lv.Minor}
 	if cv != nil && lv.LessThan(*cv) {
-		plog.Fatalf("cluster cannot be downgraded (current version: %s is lower than determined cluster version: %s).", version.Version, version.Cluster(cv.String()))
+		if IsVersionChangable(cv, lv) {
+			plog.Infof("cluster is downgrading to current version: %s from determined cluster version: %s).", version.Version, version.Cluster(cv.String()))
+		} else {
+			plog.Fatalf("cluster cannot be downgraded (current version: %s is too much lower than determined cluster version: %s).", version.Version, version.Cluster(cv.String()))
+		}
 	}
+}
+
+// IsVersionChangable checks the two scenario when version is changable:
+// 1. Downgrade: cluster version is 1 minor version higher than local version, cluster version should change
+// 2. Cluster start: when not all members version are available,  cluster version is set to MinVersion (3.0), when
+//    now all members are at higher version (3.2), cluster version is lower than local version, cluster version should change
+func IsVersionChangable(cv *semver.Version, lv *semver.Version) bool {
+	if ((cv.Major == lv.Major) && (cv.Minor-lv.Minor) == 1) || cv.LessThan(*lv) {
+		return true
+	}
+	return false
 }
