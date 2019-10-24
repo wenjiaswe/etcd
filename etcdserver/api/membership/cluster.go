@@ -886,3 +886,14 @@ func (c *RaftCluster) Downgrade() Downgrade {
 	defer c.Unlock()
 	return c.downgrade
 }
+
+func (c *RaftCluster) UpdateDowngrade(d *Downgrade) {
+	c.Lock()
+	defer c.Unlock()
+
+	if c.be != nil {
+		mustSaveDowngradeToBackend(c.be, d)
+	}
+
+	c.downgrade = *d
+}
