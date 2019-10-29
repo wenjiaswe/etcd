@@ -106,11 +106,7 @@ func downgradeStartCommandFunc(cmd *cobra.Command, args []string) {
 
 // downgradeCancelCommandFunc executes the "downgrade cancel" command
 func downgradeCancelCommandFunc(cmd *cobra.Command, args []string) {
-	if len(args) < 1 {
-		ExitWithError(ExitBadArgs, errors.New("target version not provided"))
-	}
-
-	if len(args) > 1 {
+	if len(args) > 0 {
 		ExitWithError(ExitBadArgs, errors.New("too many arguments"))
 	}
 
