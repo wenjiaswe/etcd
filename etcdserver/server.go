@@ -17,6 +17,7 @@ package etcdserver
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"expvar"
 	"fmt"
 	"math"
@@ -2717,6 +2718,11 @@ func (s *EtcdServer) raftStatus() raft.Status {
 }
 
 func (s *EtcdServer) downgradeStart(ctx context.Context, d membership.Downgrade) (*pb.DowngradeResponse, error) {
+	// validate downgrade capability before starting job
+	if resp, err := s.downgradeValidate(ctx, d.TargetVersion.String()); err != nil {
+		return resp, err
+	}
+
 	b, err := json.Marshal(d)
 	if err != nil {
 		return nil, err
@@ -2735,6 +2741,15 @@ func (s *EtcdServer) downgradeStart(ctx context.Context, d membership.Downgrade)
 }
 
 func (s *EtcdServer) downgradeCancel(ctx context.Context) (*pb.DowngradeResponse, error) {
+	if err := s.linearizableReadNotify(ctx); err != nil {
+		return nil, err
+	}
+
+	downgradeInfo := s.cluster.Downgrade()
+	if !downgradeInfo.Enabled {
+		return nil, errors.New("the cluster is not downgrading")
+	}
+
 	d := membership.Downgrade{Enabled: false}
 
 	b, err := json.Marshal(d)
