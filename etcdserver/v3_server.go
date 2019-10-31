@@ -840,7 +840,7 @@ func (s *EtcdServer) downgradeValidate(ctx context.Context, v string) (*pb.Downg
 		err = errors.New("target version is current cluster version")
 		return nil, err
 	}
-	if !membership.IsOneMinorVersionDiff(cv, targetVersion) {
+	if !membership.IsVersionChangable(cv, targetVersion) {
 		err = errors.New(
 			fmt.Sprintf(
 				"Target version violates the downgrade policy. "+
