@@ -278,7 +278,10 @@ func isCompatibleWithCluster(lg *zap.Logger, cl *membership.RaftCluster, local t
 	minV := semver.Must(semver.NewVersion(version.MinClusterVersion))
 	maxV := semver.Must(semver.NewVersion(version.Version))
 	// server can join into 1 minor version higher cluster
-	allowedClusterMinor := maxV.Minor + 1
+	allowedClusterMinor := maxV.Minor
+	if cl.Downgrade().Enabled {
+		allowedClusterMinor = maxV.Minor + 1
+	}
 	maxV = &semver.Version{
 		Major: maxV.Major,
 		Minor: allowedClusterMinor,
