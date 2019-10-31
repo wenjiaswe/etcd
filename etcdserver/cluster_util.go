@@ -177,6 +177,96 @@ func getVersions(lg *zap.Logger, cl *membership.RaftCluster, local types.ID, rt 
 	return vers
 }
 
+// isDowngradeEnabled returns the downgrade enabled status in the given cluster.
+// If the local server or any other remote server has already enable downgrade, return true.
+// Otherwise, return false.
+func isDowngradeEnabled(lg *zap.Logger, cl *membership.RaftCluster, local types.ID, rt http.RoundTripper) bool {
+	members := cl.Members()
+	for _, m := range members {
+		if m.ID == local {
+			if cl.Downgrade().Enabled {
+				return true
+			}
+			continue
+		}
+		enabled, err := getDowngradeStatus(lg, m, rt)
+		if err != nil {
+			if lg != nil {
+				lg.Warn("failed to get downgrade enabled status", zap.String("remote-member-id", m.ID.String()), zap.Error(err))
+			} else {
+				plog.Warningf("cannot get the downgrade enabled status of member %s (%v)", m.ID, err)
+			}
+		} else {
+			if enabled {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// getDowngradeStatus returns the downgrade enabled status of the given member
+// via its peerURLs. Returns the last error if it fails to get the version.
+func getDowngradeStatus(lg *zap.Logger, m *membership.Member, rt http.RoundTripper) (bool, error) {
+	cc := &http.Client{
+		Transport: rt,
+	}
+	var (
+		err  error
+		resp *http.Response
+	)
+
+	for _, u := range m.PeerURLs {
+		addr := u + "/downgrade/enabled"
+		resp, err = cc.Get(addr)
+		if err != nil {
+			if lg != nil {
+				lg.Warn(
+					"failed to reach the peer URL",
+					zap.String("address", addr),
+					zap.String("remote-member-id", m.ID.String()),
+					zap.Error(err),
+				)
+			} else {
+				plog.Warningf("failed to reach the peerURL(%s) of member %s (%v)", u, m.ID, err)
+			}
+			continue
+		}
+		var b []byte
+		b, err = ioutil.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			if lg != nil {
+				lg.Warn(
+					"failed to read body of response",
+					zap.String("address", addr),
+					zap.String("remote-member-id", m.ID.String()),
+					zap.Error(err),
+				)
+			} else {
+				plog.Warningf("failed to read out the response body from the peerURL(%s) of member %s (%v)", u, m.ID, err)
+			}
+			continue
+		}
+		var enabled bool
+		if err = json.Unmarshal(b, &enabled); err != nil {
+			if lg != nil {
+				lg.Warn(
+					"failed to unmarshal response",
+					zap.String("address", addr),
+					zap.String("remote-member-id", m.ID.String()),
+					zap.Error(err),
+				)
+			} else {
+				plog.Warningf("failed to unmarshal the response body got from the peerURL(%s) of member %s (%v)", u, m.ID, err)
+			}
+			continue
+		}
+		return enabled, nil
+	}
+	return false, err
+}
+
 // decideClusterVersion decides the cluster version based on the versions map.
 // The returned version is the min server version in the map, or nil if the min
 // version in unknown.
@@ -229,7 +319,7 @@ func decideDowngradeStatus(lg *zap.Logger, targetVersion *semver.Version, vers m
 		if ver == nil {
 			return false
 		}
-		v, err := semver.NewVersion(ver.Server)
+		v, err := semver.NewVersion(version.Cluster(ver.Server) + ".0")
 		if err != nil {
 			if lg != nil {
 				lg.Warn(
@@ -277,9 +367,10 @@ func isCompatibleWithCluster(lg *zap.Logger, cl *membership.RaftCluster, local t
 	vers := getVersions(lg, cl, local, rt)
 	minV := semver.Must(semver.NewVersion(version.MinClusterVersion))
 	maxV := semver.Must(semver.NewVersion(version.Version))
-	// server can join into 1 minor version higher cluster
+
 	allowedClusterMinor := maxV.Minor
-	if cl.Downgrade().Enabled {
+	// server can join into 1 minor version higher cluster if the cluster enables downgrade
+	if isDowngradeEnabled(lg, cl, local, rt) {
 		allowedClusterMinor = maxV.Minor + 1
 	}
 	maxV = &semver.Version{

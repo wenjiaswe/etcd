@@ -2730,6 +2730,7 @@ func (s *EtcdServer) downgradeStart(ctx context.Context, v string) (*pb.Downgrad
 	if err != nil {
 		return nil, errors.New(fmt.Sprintf("wrong version format: %v", err))
 	}
+	// cluster version only keeps major.minor, remove patch version
 	targetVersion = &semver.Version{Major: targetVersion.Major, Minor: targetVersion.Minor}
 	d := membership.Downgrade{Enabled: true, TargetVersion: targetVersion}
 
