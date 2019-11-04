@@ -2720,7 +2720,7 @@ func (s *EtcdServer) raftStatus() raft.Status {
 	return s.r.Node.Status()
 }
 
-func (s *EtcdServer) downgradeStart(ctx context.Context, v string) (*pb.DowngradeResponse, error) {
+func (s *EtcdServer) downgradeEnable(ctx context.Context, v string) (*pb.DowngradeResponse, error) {
 	// validate downgrade capability before starting job
 	if resp, err := s.downgradeValidate(ctx, v); err != nil {
 		return resp, err

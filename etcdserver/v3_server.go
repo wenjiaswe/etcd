@@ -811,8 +811,8 @@ func (s *EtcdServer) Downgrade(ctx context.Context, r *pb.DowngradeRequest) (*pb
 	switch r.Action {
 	case pb.DowngradeRequest_VALIDATE:
 		return s.downgradeValidate(ctx, r.Version)
-	case pb.DowngradeRequest_DOWNGRADE:
-		return s.downgradeStart(ctx, r.Version)
+	case pb.DowngradeRequest_ENABLE:
+		return s.downgradeEnable(ctx, r.Version)
 	case pb.DowngradeRequest_CANCEL:
 		return s.downgradeCancel(ctx)
 	}

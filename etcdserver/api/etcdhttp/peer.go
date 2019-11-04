@@ -85,7 +85,6 @@ func downgradeHandler(c api.Cluster, fn func(http.ResponseWriter, *http.Request,
 	return func(w http.ResponseWriter, r *http.Request) {
 		d := c.Downgrade()
 		fn(w, r, d.Enabled)
-
 	}
 }
 

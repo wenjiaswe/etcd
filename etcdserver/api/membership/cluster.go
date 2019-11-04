@@ -830,10 +830,10 @@ func mustDetectDowngrade(lg *zap.Logger, cv *semver.Version, d *Downgrade) {
 		if d.Enabled && d.TargetVersion.Equal(*lv) {
 			if lg != nil {
 				lg.Info(
-					"cluster is downgrading to current server version",
-					zap.String("current-server-version", version.Version),
-					zap.String("determined-cluster-version", version.Cluster(cv.String())),
+					"cluster is downgrading to target server version",
 					zap.String("target-cluster-version", d.TargetVersion.String()),
+					zap.String("determined-cluster-version", version.Cluster(cv.String())),
+					zap.String("current-server-version", version.Version),
 				)
 			} else {
 				plog.Infof("cluster is downgrading to target version: %s, "+
@@ -928,12 +928,12 @@ func (c *RaftCluster) UpdateDowngrade(d *Downgrade) {
 
 	if d.Enabled {
 		if c.lg != nil {
-			c.lg.Info("The server is ready for downgrade",
+			c.lg.Info("The server is ready to downgrade",
 				zap.String("target-version", d.TargetVersion.String()),
 				zap.String("server-version", version.Version))
 		} else {
-			plog.Info("The server is available for downgrade to target version %v, current server version %v",
-				d.TargetVersion.String(), version.Version)
+			plog.Info("The server is ready to downgrade from current server version %v to target version %v",
+				version.Version, d.TargetVersion.String())
 		}
 	}
 }
