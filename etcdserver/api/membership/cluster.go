@@ -64,10 +64,10 @@ type RaftCluster struct {
 }
 
 type Downgrade struct {
-	// the target downgrade version, if the cluster is not under downgrade,
+	// TargetVersion is the target downgrade version, if the cluster is not under downgrade,
 	// the targetVersion will be nil
 	TargetVersion *semver.Version
-	// true is the cluster is downgrading
+	// Enabled indicates whether the cluster is enabled to downgrade
 	Enabled bool
 }
 
