@@ -525,13 +525,6 @@ func TestDowngradeFromSnapshot(t *testing.T) {
 	testKVPairs(cx, kvs)
 }
 
-func mustAfter36(t *testing.T) {
-	cv := semver.Must(semver.NewVersion(version.Version))
-	if cv.LessThan(semver.Version{Major: 3, Minor: 6}) {
-		t.Skipf("current version(%v) doesn't enable downgrade ", cv.String())
-	}
-}
-
 func testDowngradeEnabled(cx ctlCtx, endpoint string, expected string) {
 	cmdArgs := []string{"curl", "-L", endpoint + "/downgrade/enabled"}
 	fmt.Println(cmdArgs)
