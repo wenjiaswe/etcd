@@ -67,6 +67,10 @@ type printer interface {
 	UserGrantRole(user string, role string, r v3.AuthUserGrantRoleResponse)
 	UserRevokeRole(user string, role string, r v3.AuthUserRevokeRoleResponse)
 	UserDelete(user string, r v3.AuthUserDeleteResponse)
+
+	DowngradeValidate(r v3.DowngradeResponse)
+	DowngradeEnable(r v3.DowngradeResponse)
+	DowngradeCancel(r v3.DowngradeResponse)
 }
 
 func NewPrinter(printerType string, isHex bool) printer {
@@ -141,6 +145,10 @@ func (p *printerRPC) UserRevokeRole(_ string, _ string, r v3.AuthUserRevokeRoleR
 func (p *printerRPC) UserDelete(_ string, r v3.AuthUserDeleteResponse) {
 	p.p((*pb.AuthUserDeleteResponse)(&r))
 }
+
+func (p *printerRPC) DowngradeValidate(r v3.DowngradeResponse) { p.p((*pb.DowngradeResponse)(&r)) }
+func (p *printerRPC) DowngradeEnable(r v3.DowngradeResponse)   { p.p((*pb.DowngradeResponse)(&r)) }
+func (p *printerRPC) DowngradeCancel(r v3.DowngradeResponse)   { p.p((*pb.DowngradeResponse)(&r)) }
 
 type printerUnsupported struct{ printerRPC }
 

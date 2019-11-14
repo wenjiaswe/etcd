@@ -100,6 +100,9 @@ const (
 	recommendedMaxRequestBytes = 10 * 1024 * 1024
 
 	readyPercent = 0.9
+
+	// Todo: need to be decided
+	monitorDowngradeInterval = time.Second
 )
 
 var (
@@ -361,7 +364,7 @@ func NewServer(cfg ServerConfig) (srv *EtcdServer, err error) {
 		if err = membership.ValidateClusterAndAssignIDs(cfg.Logger, cl, existingCluster); err != nil {
 			return nil, fmt.Errorf("error validating peerURLs %s: %v", existingCluster, err)
 		}
-		if !isCompatibleWithCluster(cfg.Logger, cl, cl.MemberByName(cfg.Name).ID, prt, cfg.EnableClusterDowngrade) {
+		if !isCompatibleWithCluster(cfg.Logger, cl, cl.MemberByName(cfg.Name).ID, prt) {
 			return nil, fmt.Errorf("incompatible with current running cluster")
 		}
 
@@ -734,6 +737,7 @@ func (s *EtcdServer) Start() {
 	s.goAttach(s.monitorVersions)
 	s.goAttach(s.linearizableReadLoop)
 	s.goAttach(s.monitorKVHash)
+	s.goAttach(s.monitorDowngrade)
 }
 
 // start prepares and starts server in a new goroutine. It is no longer safe to
@@ -868,6 +872,18 @@ func (s *EtcdServer) LeaseHandler() http.Handler {
 }
 
 func (s *EtcdServer) RaftHandler() http.Handler { return s.r.transport.Handler() }
+
+type ServerPeerHTTP interface {
+	ServerPeer
+	ServerDowngradeHTTP
+}
+
+type ServerDowngradeHTTP interface {
+	// DowngradeInfo is the downgrade information of the cluster
+	DowngradeInfo() *membership.Downgrade
+}
+
+func (s *EtcdServer) DowngradeInfo() *membership.Downgrade { return s.cluster.Downgrade() }
 
 // Process takes a raft message and applies it to the server's raft state
 // machine, respecting any timeout of the given context.
@@ -2498,7 +2514,7 @@ func (s *EtcdServer) monitorVersions() {
 		// Original etcd v3.1.26 only update cluster version if the decided version is
 		// greater than the current cluster version, in this patched etcd, we relax the rule
 		// and allow +1 or -1 minor version cluster version change
-		if v != nil && canUpdateClusterVersion(s.Cfg.EnableClusterDowngrade, v, s.cluster.Version()) {
+		if v != nil && membership.IsVersionChangable(s.cluster.Version(), v) {
 			s.goAttach(func() { s.updateClusterVersion(v.String()) })
 		}
 	}
@@ -2558,6 +2574,43 @@ func (s *EtcdServer) updateClusterVersion(ver string) {
 			lg.Warn("failed to update cluster version", zap.Error(err))
 		} else {
 			plog.Errorf("error updating cluster version (%v)", err)
+		}
+	}
+}
+
+func (s *EtcdServer) monitorDowngrade() {
+	lg := s.getLogger()
+	for {
+		select {
+		case <-time.After(monitorDowngradeInterval):
+		case <-s.stopping:
+			return
+		}
+
+		if s.Leader() != s.ID() {
+			continue
+		}
+
+		d := s.cluster.Downgrade()
+		if !d.Enabled {
+			continue
+		}
+
+		targetVersion := d.TargetVersion
+		if decideDowngradeStatus(s.getLogger(), targetVersion, getVersions(s.getLogger(), s.cluster, s.id, s.peerRt)) {
+			if lg != nil {
+				lg.Info("the cluster has been downgraded", zap.String("cluster-version", targetVersion.String()))
+			} else {
+				plog.Infof("the cluster has been downgraded to version %v", targetVersion.String())
+			}
+			if _, err := s.downgradeCancel(context.Background()); err != nil {
+				if lg != nil {
+					lg.Warn("failed to cancel downgrade", zap.Error(err))
+				} else {
+					plog.Warningf("failed to cancel downgrade %v", err)
+				}
+			}
+			continue
 		}
 	}
 }
@@ -2665,14 +2718,4 @@ func (s *EtcdServer) IsMemberExist(id types.ID) bool {
 // raftStatus returns the raft status of this etcd node.
 func (s *EtcdServer) raftStatus() raft.Status {
 	return s.r.Node.Status()
-}
-
-// Todo: start downgrade
-func (s *EtcdServer) downgradeStart(ctx context.Context, r *pb.DowngradeRequest) (*pb.DowngradeResponse, error) {
-	return nil, nil
-}
-
-// Todo: cancel downgrade
-func (s *EtcdServer) downgradeCancel(ctx context.Context, r *pb.DowngradeRequest) (*pb.DowngradeResponse, error) {
-	return nil, nil
 }

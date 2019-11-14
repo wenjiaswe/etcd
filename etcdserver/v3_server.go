@@ -19,9 +19,11 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/coreos/go-semver/semver"
+	"github.com/gogo/protobuf/proto"
 	"go.etcd.io/etcd/auth"
 	"go.etcd.io/etcd/etcdserver/api/membership"
 	pb "go.etcd.io/etcd/etcdserver/etcdserverpb"
@@ -30,8 +32,6 @@ import (
 	"go.etcd.io/etcd/mvcc"
 	"go.etcd.io/etcd/pkg/traceutil"
 	"go.etcd.io/etcd/raft"
-
-	"github.com/gogo/protobuf/proto"
 	"go.uber.org/zap"
 )
 
@@ -809,32 +809,42 @@ func (s *EtcdServer) AuthInfoFromCtx(ctx context.Context) (*auth.AuthInfo, error
 func (s *EtcdServer) Downgrade(ctx context.Context, r *pb.DowngradeRequest) (*pb.DowngradeResponse, error) {
 	switch r.Action {
 	case pb.DowngradeRequest_VALIDATE:
-		return s.downgradeValidate(ctx, r)
-	case pb.DowngradeRequest_DOWNGRADE:
-		return s.downgradeStart(ctx, r)
+		return s.downgradeValidate(ctx, r.Version)
+	case pb.DowngradeRequest_ENABLE:
+		return s.downgradeEnable(ctx, r)
 	case pb.DowngradeRequest_CANCEL:
-		return s.downgradeCancel(ctx, r)
+		return s.downgradeCancel(ctx)
 	}
 	return nil, nil
 }
 
-func (s *EtcdServer) downgradeValidate(ctx context.Context, r *pb.DowngradeRequest) (*pb.DowngradeResponse, error) {
-	var resp *pb.DowngradeResponse
+func (s *EtcdServer) downgradeValidate(ctx context.Context, v string) (*pb.DowngradeResponse, error) {
+	resp := &pb.DowngradeResponse{}
 	var err error
 
 	cv := s.ClusterVersion()
-	targetVersion := semver.Must(semver.NewVersion(r.Version))
+	targetVersion, err := semver.NewVersion(v)
+	if err != nil {
+		return nil, fmt.Errorf("wrong version format: %v", err)
+	}
 	targetVersion = &semver.Version{Major: targetVersion.Major, Minor: targetVersion.Minor}
 
 	resp.Version = cv.String()
 	if cv.LessThan(*targetVersion) {
-		err = errors.New("target version is higher than current cluster version")
-		return resp, err
+		err = errors.New("target version too high")
+		return nil, err
 	}
 
-	if !membership.IsOneMinorVersionDiff(cv, targetVersion) {
-		err = errors.New("Target version violates the downgrade policy. The cluster can only be downgraded to ")
-		return resp, err
+	if cv.Equal(*targetVersion) {
+		err = errors.New("target version is current cluster version")
+		return nil, err
+	}
+	if !membership.IsVersionChangable(cv, targetVersion) {
+		err = fmt.Errorf(
+			"target version too small. "+
+				"the cluster can only be downgraded to %s",
+			semver.Version{Major: cv.Major, Minor: cv.Minor - 1}.String())
+		return nil, err
 	}
 
 	err = s.linearizableReadNotify(ctx)
@@ -850,4 +860,44 @@ func (s *EtcdServer) downgradeValidate(ctx context.Context, r *pb.DowngradeReque
 		return resp, err
 	}
 	return resp, nil
+}
+
+func (s *EtcdServer) downgradeEnable(ctx context.Context, r *pb.DowngradeRequest) (*pb.DowngradeResponse, error) {
+	// validate downgrade capability before starting downgrade
+	v := r.Version
+	if resp, err := s.downgradeValidate(ctx, v); err != nil {
+		return resp, err
+	}
+
+	targetVersion, err := semver.NewVersion(v)
+	if err != nil {
+		return nil, fmt.Errorf("wrong version format: %v", err)
+	}
+	// cluster version only keeps major.minor, remove patch version
+	targetVersion = &semver.Version{Major: targetVersion.Major, Minor: targetVersion.Minor}
+	r.Version = targetVersion.String()
+
+	resp, err := s.raftRequest(ctx, pb.InternalRaftRequest{Downgrade: r})
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*pb.DowngradeResponse), nil
+}
+
+func (s *EtcdServer) downgradeCancel(ctx context.Context) (*pb.DowngradeResponse, error) {
+	if err := s.linearizableReadNotify(ctx); err != nil {
+		return nil, err
+	}
+
+	downgradeInfo := s.cluster.Downgrade()
+	if !downgradeInfo.Enabled {
+		return nil, errors.New("the cluster is not downgrading")
+	}
+
+	resp, err := s.raftRequest(ctx,
+		pb.InternalRaftRequest{Downgrade: &pb.DowngradeRequest{Action: pb.DowngradeRequest_CANCEL}})
+	if err != nil {
+		return nil, err
+	}
+	return resp.(*pb.DowngradeResponse), nil
 }

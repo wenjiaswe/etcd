@@ -980,9 +980,8 @@ message AlarmResponse {
 message DowngradeRequest {
   enum DowngradeAction {
   VALIDATE = 0;
-  DOWNGRADE = 1;
+  ENABLE = 1;
   CANCEL = 2;
-  STATUS = 3;
   }
 
   // action is the kind of downgrade request to issue. The action may
@@ -997,8 +996,6 @@ message DowngradeResponse {
   ResponseHeader header = 1;
   // version is the current cluster version.
   string version = 2;
-  // status is how the version of the servers in the cluster like.
-  string status = 3;
 }
 
 message StatusRequest {

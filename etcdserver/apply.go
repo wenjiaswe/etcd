@@ -21,7 +21,9 @@ import (
 	"sort"
 	"time"
 
+	"github.com/coreos/go-semver/semver"
 	"go.etcd.io/etcd/auth"
+	"go.etcd.io/etcd/etcdserver/api/membership"
 	pb "go.etcd.io/etcd/etcdserver/etcdserverpb"
 	"go.etcd.io/etcd/lease"
 	"go.etcd.io/etcd/mvcc"
@@ -82,6 +84,8 @@ type applierV3 interface {
 	RoleDelete(ua *pb.AuthRoleDeleteRequest) (*pb.AuthRoleDeleteResponse, error)
 	UserList(ua *pb.AuthUserListRequest) (*pb.AuthUserListResponse, error)
 	RoleList(ua *pb.AuthRoleListRequest) (*pb.AuthRoleListResponse, error)
+
+	Downgrade(dr *pb.DowngradeRequest) (*pb.DowngradeResponse, error)
 }
 
 type checkReqFunc func(mvcc.ReadView, *pb.RequestOp) error
@@ -170,6 +174,8 @@ func (a *applierV3backend) Apply(r *pb.InternalRaftRequest) *applyResult {
 		ar.resp, ar.err = a.s.applyV3.UserList(r.AuthUserList)
 	case r.AuthRoleList != nil:
 		ar.resp, ar.err = a.s.applyV3.RoleList(r.AuthRoleList)
+	case r.Downgrade != nil:
+		ar.resp, ar.err = a.s.applyV3.Downgrade(r.Downgrade)
 	default:
 		panic("not implemented")
 	}
@@ -680,6 +686,20 @@ func (a *applierV3backend) Alarm(ar *pb.AlarmRequest) (*pb.AlarmResponse, error)
 	default:
 		return nil, nil
 	}
+	return resp, nil
+}
+
+func (a *applierV3backend) Downgrade(dr *pb.DowngradeRequest) (*pb.DowngradeResponse, error) {
+	var d membership.Downgrade
+	switch dr.Action {
+	case pb.DowngradeRequest_ENABLE:
+		v := dr.Version
+		d = membership.Downgrade{Enabled: true, TargetVersion: semver.Must(semver.NewVersion(v))}
+	case pb.DowngradeRequest_CANCEL:
+		d = membership.Downgrade{Enabled: false}
+	}
+	a.s.cluster.UpdateDowngrade(&d)
+	resp := &pb.DowngradeResponse{Version: a.s.ClusterVersion().String()}
 	return resp, nil
 }
 

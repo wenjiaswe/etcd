@@ -226,3 +226,21 @@ func (p *fieldsPrinter) UserRevokeRole(user string, role string, r v3.AuthUserRe
 	p.hdr(r.Header)
 }
 func (p *fieldsPrinter) UserDelete(user string, r v3.AuthUserDeleteResponse) { p.hdr(r.Header) }
+
+func (p *fieldsPrinter) DowngradeValidate(r v3.DowngradeResponse) {
+	p.hdr(r.Header)
+	fmt.Println("Validate succeeded")
+	fmt.Println(`"Current cluster version" :`, r.Version)
+}
+
+func (p *fieldsPrinter) DowngradeEnable(r v3.DowngradeResponse) {
+	p.hdr(r.Header)
+	fmt.Println("The cluster is available to downgrade. Please wait until all servers are ready.")
+	fmt.Println(`"Current cluster version" :`, r.Version)
+}
+
+func (p *fieldsPrinter) DowngradeCancel(r v3.DowngradeResponse) {
+	p.hdr(r.Header)
+	fmt.Println("Cancelled")
+	fmt.Println(`"Current cluster version" :`, r.Version)
+}

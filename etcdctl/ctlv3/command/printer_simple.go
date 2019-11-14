@@ -285,3 +285,15 @@ func (s *simplePrinter) UserList(r v3.AuthUserListResponse) {
 		fmt.Printf("%s\n", user)
 	}
 }
+
+func (s *simplePrinter) DowngradeValidate(r v3.DowngradeResponse) {
+	fmt.Printf("Validate succeeded. Current cluster version is %s\n", r.Version)
+}
+
+func (s *simplePrinter) DowngradeEnable(r v3.DowngradeResponse) {
+	fmt.Printf("The cluster is available to downgrade. Please wait until all servers are ready.\n")
+}
+
+func (s *simplePrinter) DowngradeCancel(r v3.DowngradeResponse) {
+	fmt.Printf("Cancelled.\n")
+}
